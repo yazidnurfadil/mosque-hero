@@ -7,6 +7,7 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata = {
   title: "Superhero Generator",
   description: "Ayo buat superhero kamu sendiri dengan Superhero Generator!",
+    generator: 'v0.dev'
 }
 
 export default function RootLayout({
