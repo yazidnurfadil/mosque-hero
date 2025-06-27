@@ -17,6 +17,7 @@ import {
   HelpCircle,
   Menu,
   Wand2,
+  History,
 } from "lucide-react"
 
 import { Home } from "lucide-react"
@@ -70,7 +71,7 @@ export default function Sidebar() {
       >
         <div className="h-full flex flex-col">
           <Link
-            href="https://kokonutui.com/"
+            href="/"
             target="_blank"
             rel="noopener noreferrer"
             className="h-16 px-6 flex items-center border-b border-gray-200 dark:border-[#1F1F23]"
@@ -100,74 +101,17 @@ export default function Sidebar() {
             <div className="space-y-6">
               <div>
                 <div className="px-3 mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Overview
+                  Main Menu
                 </div>
                 <div className="space-y-1">
-                  <NavItem href="#" icon={Home}>
-                    Dashboard
-                  </NavItem>
-                  <NavItem href="#" icon={BarChart2}>
-                    Analytics
-                  </NavItem>
-                  <NavItem href="#" icon={Building2}>
-                    Organization
-                  </NavItem>
-                  <NavItem href="#" icon={Folder}>
-                    Projects
-                  </NavItem>
-                  <NavItem href="/superhero-generator" icon={Wand2}>
+                  <NavItem href="/" icon={Wand2}>
                     Superhero Generator
                   </NavItem>
-                </div>
-              </div>
-
-              <div>
-                <div className="px-3 mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Finance
-                </div>
-                <div className="space-y-1">
-                  <NavItem href="#" icon={Wallet}>
-                    Transactions
-                  </NavItem>
-                  <NavItem href="#" icon={Receipt}>
-                    Invoices
-                  </NavItem>
-                  <NavItem href="#" icon={CreditCard}>
-                    Payments
+                  <NavItem href="/history" icon={History}>
+                    History
                   </NavItem>
                 </div>
               </div>
-
-              <div>
-                <div className="px-3 mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Team
-                </div>
-                <div className="space-y-1">
-                  <NavItem href="#" icon={Users2}>
-                    Members
-                  </NavItem>
-                  <NavItem href="#" icon={Shield}>
-                    Permissions
-                  </NavItem>
-                  <NavItem href="#" icon={MessagesSquare}>
-                    Chat
-                  </NavItem>
-                  <NavItem href="#" icon={Video}>
-                    Meetings
-                  </NavItem>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="px-4 py-4 border-t border-gray-200 dark:border-[#1F1F23]">
-            <div className="space-y-1">
-              <NavItem href="#" icon={Settings}>
-                Settings
-              </NavItem>
-              <NavItem href="#" icon={HelpCircle}>
-                Help
-              </NavItem>
             </div>
           </div>
         </div>
