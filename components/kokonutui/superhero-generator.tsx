@@ -45,21 +45,15 @@ interface CompositeResult {
 
 const FRAME_OPTIONS = [
   {
-    value: "default",
-    label: "Gold Frame",
-    description: "Classic gold border frame",
+    value: "ikhwan",
+    label: "Ikhwan",
+    description: "Ikhwan border frame",
   },
   {
-    value: "mosque",
-    label: "Mosque Frame",
-    description: "Islamic architectural frame",
+    value: "akhwat",
+    label: "Akhwat",
+    description: "Akhwat border frame",
   },
-  {
-    value: "comic",
-    label: "Comic Frame",
-    description: "Comic book style frame",
-  },
-  { value: "hero", label: "Hero Frame", description: "Superhero themed frame" },
 ];
 
 export default function SuperheroGenerator() {
@@ -519,7 +513,9 @@ export default function SuperheroGenerator() {
                       {FRAME_OPTIONS.map((frame) => (
                         <SelectItem key={frame.value} value={frame.value}>
                           <div className="flex flex-col">
-                            <span className="font-medium">{frame.label}</span>
+                            <span className="font-medium text-left">
+                              {frame.label}
+                            </span>
                             <span className="text-xs text-gray-500">
                               {frame.description}
                             </span>
