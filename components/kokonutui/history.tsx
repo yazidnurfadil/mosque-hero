@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Download, Trash2, Calendar, ImageIcon, AlertCircle, RefreshCw } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import Image from "next/image"
-import type { SuperheroGeneration } from "@/lib/supabase"
+import type { SuperheroGeneration } from "@/lib/supabase-service"
 
 export default function History() {
   const [generations, setGenerations] = useState<SuperheroGeneration[]>([])

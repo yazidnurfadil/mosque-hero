@@ -1,6 +1,19 @@
 import { v4 as uuidv4 } from "uuid"
 import { getSupabaseServer } from "./supabase"
 
+export interface SuperheroGeneration {
+  id: string
+  user_id: string | null
+  original_image_url: string | null
+  superhero_image_url: string | null
+  composite_image_url: string | null
+  frame_type: string | null
+  generation_status: "processing" | "completed" | "failed"
+  replicate_prediction_id: string | null
+  created_at: string
+  updated_at: string
+}
+
 const BUCKET = "superhero-images"
 
 export class SupabaseService {
@@ -53,6 +66,54 @@ export class SupabaseService {
       .single()
     if (error) throw error
     return data
+  }
+
+  /* ----------  HISTORY ---------- */
+  async getGenerationHistory(userId?: string | null, limit = 20): Promise<SuperheroGeneration[]> {
+    let q = this.supabase
+      .from("superhero_generations")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(limit)
+
+    if (userId) q = q.eq("user_id", userId)
+    else q = q.is("user_id", null)
+
+    const { data, error } = await q
+    if (error) throw error
+    return (data as SuperheroGeneration[]) ?? []
+  }
+
+  /* ----------  DELETE & CLEANUP ---------- */
+  async deleteGeneration(id: string): Promise<boolean> {
+    // fetch row so we can remove any stored images
+    const { data: row, error: fetchErr } = await this.supabase
+      .from("superhero_generations")
+      .select("*")
+      .eq("id", id)
+      .single()
+
+    if (fetchErr) throw fetchErr
+    if (!row) return false
+
+    // derive storage paths from public URLs
+    const paths: string[] = []
+    const grab = (url: string | null) => {
+      if (!url) return
+      const idx = url.indexOf("/" + BUCKET + "/")
+      if (idx !== -1) paths.push(url.slice(idx + BUCKET.length + 2))
+    }
+    grab(row.original_image_url)
+    grab(row.composite_image_url)
+
+    if (paths.length) {
+      const { error: rmErr } = await this.supabase.storage.from(BUCKET).remove(paths)
+      if (rmErr) console.warn("Supabase storage remove warning:", rmErr.message)
+    }
+
+    const { error: delErr } = await this.supabase.from("superhero_generations").delete().eq("id", id)
+    if (delErr) throw delErr
+    return true
   }
 }
 
