@@ -1,281 +1,191 @@
-import { type NextRequest, NextResponse } from "next/server";
-import { supabaseService } from "@/lib/supabase-service";
-import sharp from "sharp";
+import { type NextRequest, NextResponse } from "next/server"
+import sharp from "sharp"
+import { supabaseService } from "@/lib/supabase-service"
+import path from "path"
+import fs from "fs"
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
+  console.log("🖼️ Composite image API called")
+
   try {
-    console.log("Composite image API called");
+    const formData = await request.formData()
+    const superheroImage = formData.get("superheroImage") as string
+    const frameType = formData.get("frameType") as string
+    const generationId = formData.get("generationId") as string
+    const userId = formData.get("userId") as string
 
-    const formData = await req.formData();
-    const superheroImageUrl = formData.get("superheroImage") as string;
-    const frameType = (formData.get("frameType") as string) || "default";
-    const generationId = formData.get("generationId") as string;
-    const userId = formData.get("userId") as string | null;
-
-    console.log("Request params:", {
-      superheroImageUrl,
+    console.log("📝 Composite request data:", {
+      superheroImageLength: superheroImage?.length,
       frameType,
       generationId,
       userId,
-    });
+    })
 
-    if (!superheroImageUrl) {
-      console.error("No superhero image URL provided");
-      return NextResponse.json(
-        { error: "No superhero image URL provided" },
-        { status: 400 },
-      );
+    if (!superheroImage || !frameType) {
+      console.error("❌ Missing required fields")
+      return NextResponse.json({ error: "Missing superhero image or frame type" }, { status: 400 })
     }
 
-    // Fetch the generated superhero image with proper error handling
-    console.log("Fetching superhero image from:", superheroImageUrl);
-    let superheroResponse;
+    // Validate frame type
+    const validFrames = ["ikhwan", "akhwat"]
+    if (!validFrames.includes(frameType)) {
+      console.error("❌ Invalid frame type:", frameType)
+      return NextResponse.json({ error: "Invalid frame type. Must be ikhwan or akhwat" }, { status: 400 })
+    }
+
+    console.log("🖼️ Processing composite with frame:", frameType)
+
+    // Get the frame image path
+    const frameImagePath = path.join(process.cwd(), "public", "frames", `${frameType}.png`)
+
+    // Check if frame file exists
+    if (!fs.existsSync(frameImagePath)) {
+      console.error("❌ Frame file not found:", frameImagePath)
+      return NextResponse.json({ error: `Frame file not found: ${frameType}.png` }, { status: 404 })
+    }
+
+    console.log("📁 Frame file found:", frameImagePath)
+
+    // Fetch the superhero image
+    let superheroBuffer: Buffer
     try {
-      superheroResponse = await fetch(superheroImageUrl, {
+      console.log("🌐 Fetching superhero image from:", superheroImage.substring(0, 100) + "...")
+
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
+
+      const superheroResponse = await fetch(superheroImage, {
+        signal: controller.signal,
         headers: {
           "User-Agent": "Mozilla/5.0 (compatible; SuperheroGenerator/1.0)",
         },
-        // Add timeout for production
-        signal: AbortSignal.timeout(30000), // 30 second timeout
-      });
-    } catch (fetchError) {
-      console.error("Failed to fetch superhero image:", fetchError);
-      return NextResponse.json(
-        { error: "Failed to fetch superhero image from external source" },
-        { status: 500 },
-      );
-    }
+      })
 
-    if (!superheroResponse.ok) {
-      console.error(
-        "Superhero image fetch failed:",
-        superheroResponse.status,
-        superheroResponse.statusText,
-      );
-      return NextResponse.json(
-        {
-          error: `Failed to fetch superhero image: ${superheroResponse.status}`,
-        },
-        { status: 500 },
-      );
-    }
+      clearTimeout(timeoutId)
 
-    const superheroBuffer = Buffer.from(await superheroResponse.arrayBuffer());
-    console.log("Superhero image buffer size:", superheroBuffer.length);
-
-    // Create frame based on frameType with improved SVG handling
-    let frameBuffer: Buffer;
-
-    try {
-      switch (frameType) {
-        case "ikhwan":
-          // Create mosque-themed frame with proper SVG encoding
-          frameBuffer = await createMosqueFrame();
-          break;
-
-        case "comic":
-          // Create comic book style frame
-          frameBuffer = await createComicFrame();
-          break;
-
-        case "akwat":
-          // Create superhero themed frame
-          frameBuffer = await createHeroFrame();
-          break;
-
-        default: // "default" - Gold frame
-          frameBuffer = await createDefaultFrame();
-          break;
+      if (!superheroResponse.ok) {
+        throw new Error(`Failed to fetch superhero image: ${superheroResponse.status} ${superheroResponse.statusText}`)
       }
-      console.log("Frame buffer created, size:", frameBuffer.length);
-    } catch (frameError) {
-      console.error("Error creating frame:", frameError);
-      return NextResponse.json(
-        { error: "Failed to create frame" },
-        { status: 500 },
-      );
+
+      superheroBuffer = Buffer.from(await superheroResponse.arrayBuffer())
+      console.log("✅ Superhero image fetched, size:", superheroBuffer.length, "bytes")
+    } catch (error) {
+      console.error("❌ Error fetching superhero image:", error)
+      return NextResponse.json({ error: "Failed to fetch superhero image" }, { status: 500 })
     }
 
-    // Process superhero image with error handling
-    let resizedSuperhero: Buffer;
+    // Load the frame image
+    let frameBuffer: Buffer
     try {
-      resizedSuperhero = await sharp(superheroBuffer)
-        .resize(650, 650, {
-          fit: "inside",
-          withoutEnlargement: true,
+      frameBuffer = fs.readFileSync(frameImagePath)
+      console.log("✅ Frame image loaded, size:", frameBuffer.length, "bytes")
+    } catch (error) {
+      console.error("❌ Error loading frame image:", error)
+      return NextResponse.json({ error: "Failed to load frame image" }, { status: 500 })
+    }
+
+    // Get frame dimensions
+    const frameMetadata = await sharp(frameBuffer).metadata()
+    const frameWidth = frameMetadata.width || 1080
+    const frameHeight = frameMetadata.height || 1080
+
+    console.log("📏 Frame dimensions:", { frameWidth, frameHeight })
+
+    // Process the superhero image and composite with frame
+    try {
+      console.log("🔄 Starting image composition...")
+
+      // Calculate the area where the superhero image should be placed
+      // Based on the frame design, we need to place the image in the center white area
+      const portraitSize = Math.min(frameWidth, frameHeight) * 0.6 // 60% of frame size
+      const portraitX = Math.round((frameWidth - portraitSize) / 2)
+      const portraitY = Math.round((frameHeight - portraitSize) / 2)
+
+      console.log("📐 Portrait placement:", { portraitSize, portraitX, portraitY })
+
+      // Resize and process superhero image
+      const processedSuperhero = await sharp(superheroBuffer)
+        .resize(Math.round(portraitSize), Math.round(portraitSize), {
+          fit: "cover",
+          position: "center",
         })
         .png()
-        .toBuffer();
-      console.log("Superhero image resized, size:", resizedSuperhero.length);
-    } catch (resizeError) {
-      console.error("Error resizing superhero image:", resizeError);
-      return NextResponse.json(
-        { error: "Failed to process superhero image" },
-        { status: 500 },
-      );
-    }
+        .toBuffer()
 
-    // Get dimensions of resized superhero image
-    const { width: superheroWidth, height: superheroHeight } =
-      await sharp(resizedSuperhero).metadata();
+      console.log("✅ Superhero image processed")
 
-    // Calculate position to center the superhero image (accounting for text space at bottom)
-    const offsetX = Math.round((800 - (superheroWidth || 650)) / 2);
-    const offsetY = Math.round((720 - (superheroHeight || 650)) / 2) + 20; // Leave space for text
-
-    console.log("Composite positioning:", {
-      offsetX,
-      offsetY,
-      superheroWidth,
-      superheroHeight,
-    });
-
-    // Composite the images with error handling
-    let compositeBuffer: Buffer;
-    try {
-      compositeBuffer = await sharp(frameBuffer)
+      // Composite the images
+      const compositeBuffer = await sharp(frameBuffer)
         .composite([
           {
-            input: resizedSuperhero,
-            left: offsetX,
-            top: offsetY,
+            input: processedSuperhero,
+            left: portraitX,
+            top: portraitY,
+            blend: "over",
           },
         ])
         .png()
-        .toBuffer();
-      console.log("Composite image created, size:", compositeBuffer.length);
-    } catch (compositeError) {
-      console.error("Error compositing images:", compositeError);
-      return NextResponse.json(
-        { error: "Failed to composite images" },
-        { status: 500 },
-      );
-    }
+        .toBuffer()
 
-    // Upload composite image to Supabase Storage with error handling
-    let uploadResult;
-    try {
-      uploadResult = await supabaseService.uploadImage(
-        compositeBuffer,
-        `composite-${Date.now()}.png`,
-        "image/png",
-        userId || undefined,
-      );
-      console.log("Image uploaded to Supabase:", uploadResult);
-    } catch (uploadError) {
-      console.error("Error uploading to Supabase:", uploadError);
-      return NextResponse.json(
-        { error: "Failed to upload composite image to storage" },
-        { status: 500 },
-      );
-    }
+      console.log("✅ Images composited successfully, final size:", compositeBuffer.length, "bytes")
 
-    if (!uploadResult) {
-      console.error("Upload result is null");
-      return NextResponse.json(
-        { error: "Failed to upload composite image" },
-        { status: 500 },
-      );
-    }
+      // Upload to Supabase Storage
+      let storagePath: string
+      let publicUrl: string
 
-    // Update generation record with composite image URL
-    if (generationId) {
       try {
-        await supabaseService.updateGeneration(generationId, {
-          composite_image_url: uploadResult.url,
-          generation_status: "completed",
-        });
-        console.log("Generation record updated:", generationId);
-      } catch (updateError) {
-        console.error("Error updating generation record:", updateError);
-        // Don't fail the request if DB update fails, image is already uploaded
+        console.log("☁️ Uploading to Supabase Storage...")
+
+        const timestamp = Date.now()
+        const filename = `composite-${frameType}-${timestamp}.png`
+        storagePath = `composites/${filename}`
+
+        const uploadResult = await supabaseService.uploadImage(storagePath, compositeBuffer, "image/png")
+
+        if (!uploadResult.success || !uploadResult.publicUrl) {
+          throw new Error(uploadResult.error || "Failed to get public URL")
+        }
+
+        publicUrl = uploadResult.publicUrl
+        console.log("✅ Image uploaded to storage:", publicUrl)
+      } catch (error) {
+        console.error("❌ Storage upload failed:", error)
+        return NextResponse.json({ error: "Failed to save composite image" }, { status: 500 })
       }
+
+      // Update database record if generationId is provided
+      if (generationId) {
+        try {
+          console.log("💾 Updating database record...")
+
+          await supabaseService.updateGeneration(generationId, {
+            composite_image_url: publicUrl,
+            composite_storage_path: storagePath,
+            frame_type: frameType,
+            status: "completed",
+          })
+
+          console.log("✅ Database updated successfully")
+        } catch (error) {
+          console.error("⚠️ Database update failed (non-critical):", error)
+          // Don't fail the request if database update fails
+        }
+      }
+
+      console.log("🎉 Composite operation completed successfully")
+
+      return NextResponse.json({
+        success: true,
+        compositeImage: publicUrl,
+        storagePath: storagePath,
+        frameType: frameType,
+      })
+    } catch (error) {
+      console.error("❌ Image processing error:", error)
+      return NextResponse.json({ error: "Failed to process images" }, { status: 500 })
     }
-
-    console.log("Composite image API completed successfully");
-    return NextResponse.json({
-      success: true,
-      compositeImage: uploadResult.url,
-      storagePath: uploadResult.path,
-    });
   } catch (error) {
-    console.error("Composite image API error:", error);
-    return NextResponse.json(
-      {
-        error: `Failed to composite image: ${error instanceof Error ? error.message : "Unknown error"}`,
-      },
-      { status: 500 },
-    );
+    console.error("❌ Composite API error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-}
-
-// Helper functions for creating frames with proper error handling
-async function createMosqueFrame(): Promise<Buffer> {
-  const svgContent = `
-    <svg width="800" height="800" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <pattern id="islamicPattern" patternUnits="userSpaceOnUse" width="40" height="40">
-          <rect width="40" height="40" fill="#006400"/>
-          <circle cx="20" cy="20" r="8" fill="none" stroke="#FFD700" stroke-width="2"/>
-        </pattern>
-      </defs>
-      <rect x="0" y="0" width="800" height="800" fill="#006400"/>
-      <rect x="0" y="0" width="800" height="800" fill="none" stroke="#FFD700" stroke-width="20"/>
-      <rect x="40" y="40" width="720" height="720" fill="none" stroke="#FFD700" stroke-width="4"/>
-      <text x="400" y="780" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#FFD700">SUPER HERO MASJID</text>
-    </svg>
-  `;
-
-  return await sharp(Buffer.from(svgContent)).png().toBuffer();
-}
-
-async function createComicFrame(): Promise<Buffer> {
-  const svgContent = `
-    <svg width="800" height="800" xmlns="http://www.w3.org/2000/svg">
-      <rect x="0" y="0" width="800" height="800" fill="#FFFF00"/>
-      <rect x="0" y="0" width="800" height="800" fill="none" stroke="#000000" stroke-width="15"/>
-      <rect x="30" y="30" width="740" height="740" fill="none" stroke="#FF0000" stroke-width="8"/>
-      <text x="400" y="780" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="#FF0000" stroke="#000000" stroke-width="2">SUPER HERO MASJID</text>
-    </svg>
-  `;
-
-  return await sharp(Buffer.from(svgContent)).png().toBuffer();
-}
-
-async function createHeroFrame(): Promise<Buffer> {
-  const svgContent = `
-    <svg width="800" height="800" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <radialGradient id="heroGradient" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" style="stop-color:#000080;stop-opacity:1" />
-          <stop offset="100%" style="stop-color:#000040;stop-opacity:1" />
-        </radialGradient>
-      </defs>
-      <rect x="0" y="0" width="800" height="800" fill="url(#heroGradient)"/>
-      <rect x="0" y="0" width="800" height="800" fill="none" stroke="#FF0000" stroke-width="12"/>
-      <rect x="25" y="25" width="750" height="750" fill="none" stroke="#FFD700" stroke-width="6"/>
-      <text x="400" y="780" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" font-weight="bold" fill="#FFD700" stroke="#FF0000" stroke-width="1">SUPER HERO MASJID</text>
-    </svg>
-  `;
-
-  return await sharp(Buffer.from(svgContent)).png().toBuffer();
-}
-
-async function createDefaultFrame(): Promise<Buffer> {
-  const svgContent = `
-    <svg width="800" height="800" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <radialGradient id="goldGradient" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" style="stop-color:#FFD700;stop-opacity:1" />
-          <stop offset="100%" style="stop-color:#B8860B;stop-opacity:1" />
-        </radialGradient>
-      </defs>
-      <rect x="0" y="0" width="800" height="800" fill="url(#goldGradient)"/>
-      <rect x="0" y="0" width="800" height="800" fill="none" stroke="#8B4513" stroke-width="10"/>
-      <rect x="20" y="20" width="760" height="760" fill="none" stroke="#8B4513" stroke-width="4"/>
-      <text x="400" y="780" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#8B4513">SUPER HERO MASJID</text>
-    </svg>
-  `;
-
-  return await sharp(Buffer.from(svgContent)).png().toBuffer();
 }
