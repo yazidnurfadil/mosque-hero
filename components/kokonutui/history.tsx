@@ -5,10 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Download, Trash2, Calendar, ImageIcon, AlertCircle, Loader2, RefreshCw } from "lucide-react"
+import { Trash2, Calendar, ImageIcon, AlertCircle, Loader2, RefreshCw } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import Image from "next/image"
 import type { SuperheroGeneration } from "@/lib/supabase-service"
+import ThermalPrintControls from "@/components/thermal-print-controls"
 
 export default function History() {
   const [generations, setGenerations] = useState<SuperheroGeneration[]>([])
@@ -257,37 +258,32 @@ export default function History() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-2">
+                <div className="space-y-3">
                   {(generation.composite_image_url || generation.superhero_image_url) && (
-                    <Button
-                      onClick={() =>
-                        downloadImage(
-                          generation.composite_image_url || generation.superhero_image_url!,
-                          `superhero-${generation.id}.png`,
-                        )
-                      }
-                      size="sm"
-                      className="flex-1 gap-2"
-                    >
-                      <Download className="h-3 w-3" />
-                      Download
-                    </Button>
+                    <ThermalPrintControls
+                      imageUrl={generation.composite_image_url || generation.superhero_image_url!}
+                      downloadUrl={generation.composite_image_url || generation.superhero_image_url!}
+                      generationId={generation.id}
+                      className="border-0 shadow-none p-0"
+                    />
                   )}
 
-                  <Button
-                    onClick={() => deleteGeneration(generation.id)}
-                    disabled={deletingIds.has(generation.id)}
-                    size="sm"
-                    variant="destructive"
-                    className="gap-2"
-                  >
-                    {deletingIds.has(generation.id) ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-3 w-3" />
-                    )}
-                    Delete
-                  </Button>
+                  <div className="flex gap-2 pt-2 border-t">
+                    <Button
+                      onClick={() => deleteGeneration(generation.id)}
+                      disabled={deletingIds.has(generation.id)}
+                      size="sm"
+                      variant="destructive"
+                      className="gap-2"
+                    >
+                      {deletingIds.has(generation.id) ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3 w-3" />
+                      )}
+                      Delete
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Status Info */}

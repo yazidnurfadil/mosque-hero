@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useRef, useCallback, useEffect } from "react"
-import { Camera, Upload, Wand2, Download, RotateCcw, Loader2, ImageIcon, AlertCircle, CheckCircle } from "lucide-react"
+import { Camera, Upload, Wand2, RotateCcw, Loader2, AlertCircle, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { toast } from "@/hooks/use-toast"
 import Image from "next/image"
+import ThermalPrintControls from "@/components/thermal-print-controls"
 
 // ADD near the top of the file, after the imports
 async function extractError(resp: Response): Promise<string> {
@@ -554,27 +555,19 @@ export default function SuperheroGenerator() {
                     className="object-cover"
                   />
                 </div>
-                <div className="flex gap-2">
-                  <Button onClick={downloadImage} className="flex-1 gap-2">
-                    <Download className="h-4 w-4" />
-                    Download Portrait
-                  </Button>
-                  {generationResult?.output?.[0] && !compositeResult && (
-                    <Button
-                      onClick={() => compositeWithFrame(generationResult.output![0], generationResult.generationId)}
-                      variant="outline"
-                      className="gap-2"
-                    >
-                      <ImageIcon className="h-4 w-4" />
-                      Add Frame
-                    </Button>
-                  )}
-                </div>
+
+                {/* Thermal Print Controls */}
+                <ThermalPrintControls
+                  imageUrl={finalImage}
+                  downloadUrl={finalImage}
+                  generationId={generationResult?.generationId}
+                />
+
                 {compositeResult?.success && (
                   <Alert>
                     <CheckCircle className="h-4 w-4" />
                     <AlertDescription>
-                      Your superhero portrait has been saved to your gallery and is ready for download!
+                      Your superhero portrait has been saved and is ready for download and thermal printing!
                     </AlertDescription>
                   </Alert>
                 )}
