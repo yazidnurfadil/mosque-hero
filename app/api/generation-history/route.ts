@@ -3,43 +3,58 @@ import { supabaseService } from "@/lib/supabase-service"
 
 export async function GET(req: NextRequest) {
   try {
+    console.log("Generation history API called")
+
     const { searchParams } = new URL(req.url)
     const userId = searchParams.get("userId")
     const limit = Number.parseInt(searchParams.get("limit") || "20")
 
-    const generations = await supabaseService.getGenerationHistory(userId || undefined, limit)
+    console.log("Request params:", { userId, limit })
 
-    return NextResponse.json({
-      success: true,
-      generations,
-    })
+    const history = await supabaseService.getGenerationHistory(userId, limit)
+
+    console.log("Generation history fetched:", history.length, "records")
+    return NextResponse.json({ history })
   } catch (error) {
-    console.error("Error fetching generation history:", error)
-    return NextResponse.json({ error: "Failed to fetch generation history" }, { status: 500 })
+    console.error("Generation history API error:", error)
+    return NextResponse.json(
+      {
+        error: `Failed to fetch generation history: ${error instanceof Error ? error.message : "Unknown error"}`,
+      },
+      { status: 500 },
+    )
   }
 }
 
 export async function DELETE(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url)
-    const generationId = searchParams.get("id")
+    console.log("Delete generation API called")
 
-    if (!generationId) {
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get("id")
+
+    if (!id) {
+      console.error("No generation ID provided")
       return NextResponse.json({ error: "No generation ID provided" }, { status: 400 })
     }
 
-    const success = await supabaseService.deleteGeneration(generationId)
+    console.log("Deleting generation:", id)
+    const success = await supabaseService.deleteGeneration(id)
 
     if (!success) {
-      return NextResponse.json({ error: "Failed to delete generation" }, { status: 500 })
+      console.error("Generation not found:", id)
+      return NextResponse.json({ error: "Generation not found" }, { status: 404 })
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Generation deleted successfully",
-    })
+    console.log("Generation deleted successfully:", id)
+    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("Error deleting generation:", error)
-    return NextResponse.json({ error: "Failed to delete generation" }, { status: 500 })
+    console.error("Delete generation API error:", error)
+    return NextResponse.json(
+      {
+        error: `Failed to delete generation: ${error instanceof Error ? error.message : "Unknown error"}`,
+      },
+      { status: 500 },
+    )
   }
 }

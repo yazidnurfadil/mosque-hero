@@ -1,62 +1,116 @@
-import { type NextRequest, NextResponse } from "next/server";
-import { supabaseService } from "@/lib/supabase-service";
+import { type NextRequest, NextResponse } from "next/server"
+import { supabaseService } from "@/lib/supabase-service"
 
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const predictionId = searchParams.get("id");
-    const generationId = searchParams.get("generationId");
+    const { searchParams } = new URL(req.url)
+    const predictionId = searchParams.get("id")
+    const generationId = searchParams.get("generationId")
+
+    console.log("Check generation API called:", { predictionId, generationId })
 
     if (!predictionId) {
+      console.error("No prediction ID provided")
+      return NextResponse.json({ error: "No prediction ID provided" }, { status: 400 })
+    }
+
+    // Check for Replicate API token
+    const replicateToken = process.env.REPLICATE_API_TOKEN
+    if (!replicateToken) {
+      console.error("Missing REPLICATE_API_TOKEN environment variable")
       return NextResponse.json(
-        { error: "No prediction ID provided" },
-        { status: 400 },
-      );
+        {
+          error: "AI service not configured",
+        },
+        { status: 500 },
+      )
     }
 
     // Check Replicate prediction status
-    const response = await fetch(
-      `https://api.replicate.com/v1/predictions/${predictionId}`,
-      {
+    let replicateResponse
+    try {
+      console.log("Checking Replicate prediction status:", predictionId)
+      replicateResponse = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
         headers: {
-          Authorization: `Bearer ${process.env.REPLICATE_API_TOKEN}`,
+          Authorization: `Token ${replicateToken}`,
+          "User-Agent": "SuperheroGenerator/1.0",
         },
-      },
-    );
-    if (!response.ok) {
-      throw new Error(`Replicate API error: ${response.statusText}`);
+      })
+
+      console.log("Replicate status check response:", replicateResponse.status)
+    } catch (fetchError) {
+      console.error("Error checking Replicate status:", fetchError)
+      return NextResponse.json(
+        {
+          error: "Failed to check generation status",
+        },
+        { status: 500 },
+      )
     }
 
-    const prediction = await response.json();
-
-    // Update generation record if we have a generationId
-    if (
-      generationId &&
-      prediction.status === "succeeded" &&
-      prediction.output
-    ) {
-      await supabaseService.updateGeneration(generationId, {
-        superhero_image_url: prediction.output,
-        generation_status: "completed",
-      });
-    } else if (generationId && prediction.status === "failed") {
-      await supabaseService.updateGeneration(generationId, {
-        generation_status: "failed",
-      });
+    if (!replicateResponse.ok) {
+      const errorText = await replicateResponse.text().catch(() => "Unknown error")
+      console.error("Replicate status check error:", replicateResponse.status, errorText)
+      return NextResponse.json(
+        {
+          error: "Failed to check generation status",
+        },
+        { status: 500 },
+      )
     }
 
+    let result
+    try {
+      result = await replicateResponse.json()
+      console.log("Replicate prediction result:", result)
+    } catch (jsonError) {
+      console.error("Error parsing Replicate response:", jsonError)
+      return NextResponse.json(
+        {
+          error: "Invalid response from AI service",
+        },
+        { status: 500 },
+      )
+    }
+
+    // Update database record if generation is complete
+    if (generationId && (result.status === "succeeded" || result.status === "failed")) {
+      try {
+        const updateFields: Record<string, unknown> = {
+          generation_status: result.status === "succeeded" ? "completed" : "failed",
+        }
+
+        if (result.status === "succeeded" && result.output && result.output.length > 0) {
+          updateFields.superhero_image_url = result.output[0]
+        }
+
+        if (result.status === "failed" && result.error) {
+          updateFields.error_message = result.error
+        }
+
+        await supabaseService.updateGeneration(generationId, updateFields)
+        console.log("Generation record updated:", generationId)
+      } catch (updateError) {
+        console.error("Error updating generation record:", updateError)
+        // Don't fail the request if DB update fails
+      }
+    }
+
+    console.log("Check generation API completed successfully")
     return NextResponse.json({
-      id: prediction.id,
+      id: result.id,
       generationId,
-      status: prediction.status,
-      output: prediction.output,
-      error: prediction.error,
-    });
+      status: result.status,
+      output: result.output,
+      error: result.error,
+    })
   } catch (error) {
-    console.error("Error checking generation:", error);
+    console.error("Check generation API error:", error)
     return NextResponse.json(
-      { error: "Failed to check generation status" },
+      {
+        error: `Failed to check generation status: ${error instanceof Error ? error.message : "Unknown error"}`,
+      },
       { status: 500 },
-    );
+    )
   }
 }
