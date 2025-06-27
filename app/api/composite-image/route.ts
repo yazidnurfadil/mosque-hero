@@ -1,8 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 import { supabaseService } from "@/lib/supabase-service";
-import path from "path";
-import fs from "fs";
 
 export async function POST(request: NextRequest) {
   console.log("🖼️ Composite image API called");
@@ -41,24 +39,30 @@ export async function POST(request: NextRequest) {
 
     console.log("🖼️ Processing composite with frame:", frameType);
 
-    // Get the frame image path
-    const frameImagePath = path.join(
-      process.cwd(),
-      "public",
-      "frames",
-      `${frameType}.png`,
-    );
+    // Get the frame image URL (served from public/frames)
+    const baseUrl =
+      process.env.NEXT_PUBLIC_BASE_URL || (request.headers.get("origin") ?? "");
+    const frameImageUrl = `${baseUrl}/frames/${frameType}.png`;
 
-    // Check if frame file exists
-    if (!fs.existsSync(frameImagePath)) {
-      console.error("❌ Frame file not found:", frameImagePath);
+    // Fetch the frame image
+    let frameBuffer: Buffer;
+    try {
+      console.log("🌐 Fetching frame image from:", frameImageUrl);
+      const frameResponse = await fetch(frameImageUrl);
+      if (!frameResponse.ok) {
+        throw new Error(
+          `Failed to fetch frame image: ${frameResponse.status} ${frameResponse.statusText}`,
+        );
+      }
+      frameBuffer = Buffer.from(await frameResponse.arrayBuffer());
+      console.log("✅ Frame image fetched, size:", frameBuffer.length, "bytes");
+    } catch (error) {
+      console.error("❌ Error fetching frame image:", error);
       return NextResponse.json(
         { error: `Frame file not found: ${frameType}.png` },
         { status: 404 },
       );
     }
-
-    console.log("📁 Frame file found:", frameImagePath);
 
     // Fetch the superhero image
     let superheroBuffer: Buffer;
@@ -96,19 +100,6 @@ export async function POST(request: NextRequest) {
       console.error("❌ Error fetching superhero image:", error);
       return NextResponse.json(
         { error: "Failed to fetch superhero image" },
-        { status: 500 },
-      );
-    }
-
-    // Load the frame image
-    let frameBuffer: Buffer;
-    try {
-      frameBuffer = fs.readFileSync(frameImagePath);
-      console.log("✅ Frame image loaded, size:", frameBuffer.length, "bytes");
-    } catch (error) {
-      console.error("❌ Error loading frame image:", error);
-      return NextResponse.json(
-        { error: "Failed to load frame image" },
         { status: 500 },
       );
     }
