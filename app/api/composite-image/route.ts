@@ -124,21 +124,24 @@ export async function POST(request: NextRequest) {
     try {
       console.log("🔄 Starting image composition...");
 
-      // Calculate the area where the superhero image should be placed
-      // Based on the frame design, we need to place the image in the center white area
-      const portraitSize = Math.min(frameWidth, frameHeight) * 0.6; // 60% of frame size
-      const portraitX = Math.round((frameWidth - portraitSize) / 2);
-      const portraitY = Math.round((frameHeight - portraitSize) / 2);
+      // Calculate the area for the portrait and frame
+      // Portrait will be 90% of the composite size, frame will be 100%
+      const compositeSize = Math.min(frameWidth, frameHeight);
+      const portraitSize = Math.round(compositeSize * 0.85); // 80% of composite
+      const frameSize = compositeSize; // 100% of composite
+      const portraitX = Math.round((compositeSize - portraitSize) / 2);
+      const portraitY = Math.round((compositeSize - portraitSize) / 2);
 
       console.log("📐 Portrait placement:", {
         portraitSize,
         portraitX,
         portraitY,
+        frameSize,
       });
 
-      // Resize and process superhero image
+      // Resize and process superhero image (portrait)
       const processedSuperhero = await sharp(superheroBuffer)
-        .resize(Math.round(portraitSize), Math.round(portraitSize), {
+        .resize(portraitSize, portraitSize, {
           fit: "cover",
           position: "center",
         })
@@ -147,13 +150,37 @@ export async function POST(request: NextRequest) {
 
       console.log("✅ Superhero image processed");
 
-      // Composite the images
-      const compositeBuffer = await sharp(frameBuffer)
+      // Resize the frame to be slightly bigger (100% of composite)
+      const resizedFrame = await sharp(frameBuffer)
+        .resize(frameSize, frameSize, {
+          fit: "contain",
+          position: "center",
+        })
+        .png()
+        .toBuffer();
+
+      // Create a blank canvas for the composite
+      const compositeBuffer = await sharp({
+        create: {
+          width: compositeSize,
+          height: compositeSize,
+          channels: 4,
+          background: { r: 0, g: 0, b: 0, alpha: 0 },
+        },
+      })
         .composite([
+          // Place the portrait first (behind)
           {
             input: processedSuperhero,
             left: portraitX,
             top: portraitY,
+            blend: "over",
+          },
+          // Place the frame on top
+          {
+            input: resizedFrame,
+            left: 0,
+            top: 0,
             blend: "over",
           },
         ])

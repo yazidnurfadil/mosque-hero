@@ -105,8 +105,8 @@ export async function POST(req: NextRequest) {
 
     // Call Replicate API with improved error handling
     let replicateResponse;
-    const ikhwanPromt = `
-      Generate a colorful, comic-style illustration of a young boy character, around 6 years old, designed as a symbolic hero of cleanliness and community care. He wears a creative and modest costume with fun details that reflect his character style. His face should look cheerful and expressive, with a curious or energetic attitude.
+    const ikhwanPromt = `Use the provided input image as a visual reference for the child's face. Match the facial features, skin tone, and expression style as closely as possible, while adapting the head to the character’s new costume.
+      make this into a colorful, comic-style illustration of a young boy character, around 6 years old, designed as a symbolic hero of cleanliness and community care. He wears a creative and modest costume with fun details that reflect his character style. His face should look cheerful and expressive, with a curious or energetic attitude.
 
       Only show the character from **head to torso** — do not include the legs or feet. The image should be **cropped at the waist or hips**, like a portrait or half-body character illustration. Focus on facial expression, costume design, and how he holds his cleaning tool.
 
@@ -123,26 +123,25 @@ export async function POST(req: NextRequest) {
       For the character’s visual concept, choose **exactly one theme** from the list below and use it to inspire his costume, personality, and pose. Do not blend styles.
 
       Available archetype inspirations (pick one):
-      - A clever robot  
-      - A brave jungle explorer  
-      - A futuristic space pilot  
-      - A cheerful farmer  
-      - A playful forest creature  
-      - A colorful butterfly boy  
-      - A magical inventor  
-      - A tiny recycling superhero (original design)
+      - A clever robot with jetpack
+      - A brave jungle explorer with cape
+      - A futuristic space pilot with jetpack
+      - A cheerful farmer with cape
+      - A playful forest creature with wings
+      - A magical inventor with cape
+      - A tiny recycling superhero with cape
 
       Do not use copyrighted superhero outfits, logos, capes, or comic book characters. Focus on original, imaginative design suitable for a child character.
 
-      Use bold colors, thick comic-style outlines, and place the character against a bright yellow background. At the bottom of the image, include the stylized text: **“SUPER HERO MASJID”** in bold red capital letters with a black outline.
+      Use bold colors, thick comic-style outlines, and place the character against a bright blue background.
     `;
 
-    const akhwatPromt = `
-      Generate a colorful, comic-style illustration of a young boy character, around 6 years old, designed as a symbolic hero of cleanliness and community care. He wears a creative and modest costume with fun details that reflect his character style. His face should look cheerful and expressive, with a curious or energetic attitude.
+    const akhwatPromt = `Use the provided input image as a visual reference for the child's face. Match the facial features, skin tone, and expression style as closely as possible, while adapting the head to the character’s new costume.
+      make this into a colorful, comic-style illustration of a young girl character, around 6 years old, designed as a symbolic hero of cleanliness and community care. She wears a modest and creative costume that includes a hijab as part of her outfit. Her face is soft and expressive, with a joyful and determined look.
 
-      Only show the character from **head to torso** — do not include the legs or feet. The image should be **cropped at the waist or hips**, like a portrait or half-body character illustration. Focus on facial expression, costume design, and how he holds his cleaning tool.
+      Only show the character from **head to torso** — do not include the legs or feet. Focus the composition on her facial expression, costume details, pose, and the cleaning tool she holds. The image should be **cropped at the waist or hips**, like a portrait or half-body character illustration.
 
-      He holds one cleaning-related tool as his main “weapon of choice”, selected from the following list:  
+      She holds one cleaning-related tool as her main “weapon of choice”, selected from the following list:  
       - broom  
       - mop  
       - vacuum cleaner  
@@ -150,23 +149,23 @@ export async function POST(req: NextRequest) {
       - spray bottle  
       - trash grabber  
       - floor buffer  
-      Choose only one item and show him holding or interacting with it confidently above the waist.
+      Choose only one item and show her holding or interacting with it confidently above the waist.
 
-      For the character’s visual concept, choose **exactly one theme** from the list below and use it to inspire his costume, personality, and pose. Do not blend styles.
+      For her character style, choose **one visual theme** from the list below and use it to inspire her costume and expression. Do not combine styles.
 
       Available archetype inspirations (pick one):
-      - A clever robot  
-      - A brave jungle explorer  
-      - A futuristic space pilot  
-      - A cheerful farmer  
-      - A playful forest creature  
-      - A colorful butterfly boy  
-      - A magical inventor  
-      - A tiny recycling superhero (original design)
+      - A helpful robot with jetpack
+      - A graceful fairy with wings
+      - A colorful butterfly with wings 
+      - A jungle explorer with cape
+      - A space traveler with cape
+      - A magical forest guardian with cape
+      - A futuristic engineer with jetpack  
+      - A cheerful gardener with cape
 
-      Do not use copyrighted superhero outfits, logos, capes, or comic book characters. Focus on original, imaginative design suitable for a child character.
+      Avoid superhero references, capes, logos, or comic book characters. Focus on originality, creativity, and visual storytelling.
 
-      Use bold colors, thick comic-style outlines, and place the character against a bright yellow background. At the bottom of the image, include the stylized text: **“SUPER HERO MASJID”** in bold red capital letters with a black outline.
+      Use bold colors, thick comic-style outlines, and place the character against a bright yellow background.
     `;
 
     try {
@@ -184,7 +183,9 @@ export async function POST(req: NextRequest) {
             input: {
               input_image: originalImageResult.url,
               prompt: frameType === "ikhwan" ? ikhwanPromt : akhwatPromt,
+              aspect_ratio: "1:1",
               output_format: "jpg",
+              safety_tolerance: 6,
             },
           }),
         },
