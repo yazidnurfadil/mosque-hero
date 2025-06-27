@@ -116,6 +116,9 @@ importers:
       fs:
         specifier: latest
         version: 0.0.1-security
+      html2canvas:
+        specifier: latest
+        version: 1.4.1
       input-otp:
         specifier: latest
         version: 1.4.2(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
@@ -181,7 +184,7 @@ importers:
         specifier: ^22
         version: 22.0.0
       '@types/qrcode':
-        specifier: ^1.5.5
+        specifier: latest
         version: 1.5.5
       '@types/react':
         specifier: ^19
@@ -4711,8 +4714,7 @@ snapshots:
 
   balanced-match@1.0.2: {}
 
-  base64-arraybuffer@1.0.2:
-    optional: true
+  base64-arraybuffer@1.0.2: {}
 
   binary-extensions@2.3.0: {}
 
@@ -4847,7 +4849,6 @@ snapshots:
   css-line-break@2.1.0:
     dependencies:
       utrie: 1.0.2
-    optional: true
 
   cssesc@3.0.0: {}
 
@@ -5481,7 +5482,6 @@ snapshots:
     dependencies:
       css-line-break: 2.1.0
       text-segmentation: 1.0.3
-    optional: true
 
   ignore@5.3.2: {}
 
@@ -6449,7 +6449,6 @@ snapshots:
   text-segmentation@1.0.3:
     dependencies:
       utrie: 1.0.2
-    optional: true
 
   text-table@0.2.0: {}
 
@@ -6595,7 +6594,6 @@ snapshots:
   utrie@1.0.2:
     dependencies:
       base64-arraybuffer: 1.0.2
-    optional: true
 
   uuid@11.1.0: {}
 

@@ -5,17 +5,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Trash2, Calendar, ImageIcon, AlertCircle, Loader2, RefreshCw } from "lucide-react"
+import { Download, Trash2, Calendar, ImageIcon, AlertCircle, Loader2, RefreshCw, QrCode, Printer } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import Image from "next/image"
 import type { SuperheroGeneration } from "@/lib/supabase-service"
-import ThermalPrintControls from "@/components/thermal-print-controls"
+import { generateDownloadQRPDF, generatePortraitPDF, downloadBlob } from "@/lib/print-utils"
 
 export default function History() {
   const [generations, setGenerations] = useState<SuperheroGeneration[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
+  const [generatingPDF, setGeneratingPDF] = useState<Set<string>>(new Set())
 
   const fetchHistory = async () => {
     try {
@@ -141,6 +142,68 @@ export default function History() {
     }
   }
 
+  const generateQRCodePDF = async (generation: SuperheroGeneration) => {
+    const imageUrl = generation.composite_image_url || generation.superhero_image_url
+    if (!imageUrl) return
+
+    try {
+      setGeneratingPDF((prev) => new Set(prev).add(`qr-${generation.id}`))
+      console.log("Generating QR code PDF for:", imageUrl)
+
+      const pdfBlob = await generateDownloadQRPDF(imageUrl, `superhero-qr-${generation.id}.pdf`)
+      downloadBlob(pdfBlob, `superhero-qr-${generation.id}.pdf`)
+
+      toast({
+        title: "QR Code PDF Generated",
+        description: "Your QR code PDF is ready for thermal printing!",
+      })
+    } catch (error) {
+      console.error("Error generating QR PDF:", error)
+      toast({
+        title: "Error",
+        description: "Failed to generate QR code PDF",
+        variant: "destructive",
+      })
+    } finally {
+      setGeneratingPDF((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(`qr-${generation.id}`)
+        return newSet
+      })
+    }
+  }
+
+  const generatePortraitPrintPDF = async (generation: SuperheroGeneration) => {
+    const imageUrl = generation.composite_image_url || generation.superhero_image_url
+    if (!imageUrl) return
+
+    try {
+      setGeneratingPDF((prev) => new Set(prev).add(`portrait-${generation.id}`))
+      console.log("Generating portrait PDF for:", imageUrl)
+
+      const pdfBlob = await generatePortraitPDF(imageUrl, `superhero-portrait-${generation.id}.pdf`)
+      downloadBlob(pdfBlob, `superhero-portrait-${generation.id}.pdf`)
+
+      toast({
+        title: "Portrait PDF Generated",
+        description: "Your portrait PDF is ready for thermal printing!",
+      })
+    } catch (error) {
+      console.error("Error generating portrait PDF:", error)
+      toast({
+        title: "Error",
+        description: "Failed to generate portrait PDF",
+        variant: "destructive",
+      })
+    } finally {
+      setGeneratingPDF((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(`portrait-${generation.id}`)
+        return newSet
+      })
+    }
+  }
+
   useEffect(() => {
     fetchHistory()
   }, [])
@@ -258,17 +321,25 @@ export default function History() {
                 </div>
 
                 {/* Actions */}
-                <div className="space-y-3">
-                  {(generation.composite_image_url || generation.superhero_image_url) && (
-                    <ThermalPrintControls
-                      imageUrl={generation.composite_image_url || generation.superhero_image_url!}
-                      downloadUrl={generation.composite_image_url || generation.superhero_image_url!}
-                      generationId={generation.id}
-                      className="border-0 shadow-none p-0"
-                    />
-                  )}
+                <div className="space-y-2">
+                  {/* Download Actions */}
+                  <div className="flex gap-2">
+                    {(generation.composite_image_url || generation.superhero_image_url) && (
+                      <Button
+                        onClick={() =>
+                          downloadImage(
+                            generation.composite_image_url || generation.superhero_image_url!,
+                            `superhero-${generation.id}.png`,
+                          )
+                        }
+                        size="sm"
+                        className="flex-1 gap-2"
+                      >
+                        <Download className="h-3 w-3" />
+                        Download
+                      </Button>
+                    )}
 
-                  <div className="flex gap-2 pt-2 border-t">
                     <Button
                       onClick={() => deleteGeneration(generation.id)}
                       disabled={deletingIds.has(generation.id)}
@@ -284,6 +355,41 @@ export default function History() {
                       Delete
                     </Button>
                   </div>
+
+                  {/* Print Actions */}
+                  {(generation.composite_image_url || generation.superhero_image_url) && (
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => generateQRCodePDF(generation)}
+                        disabled={generatingPDF.has(`qr-${generation.id}`)}
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 gap-2"
+                      >
+                        {generatingPDF.has(`qr-${generation.id}`) ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <QrCode className="h-3 w-3" />
+                        )}
+                        QR PDF
+                      </Button>
+
+                      <Button
+                        onClick={() => generatePortraitPrintPDF(generation)}
+                        disabled={generatingPDF.has(`portrait-${generation.id}`)}
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 gap-2"
+                      >
+                        {generatingPDF.has(`portrait-${generation.id}`) ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Printer className="h-3 w-3" />
+                        )}
+                        Print PDF
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Status Info */}

@@ -3,7 +3,19 @@
 import type React from "react"
 
 import { useState, useRef, useCallback, useEffect } from "react"
-import { Camera, Upload, Wand2, RotateCcw, Loader2, AlertCircle, CheckCircle } from "lucide-react"
+import {
+  Camera,
+  Upload,
+  Wand2,
+  Download,
+  RotateCcw,
+  Loader2,
+  ImageIcon,
+  AlertCircle,
+  CheckCircle,
+  QrCode,
+  Printer,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -11,7 +23,8 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { toast } from "@/hooks/use-toast"
 import Image from "next/image"
-import ThermalPrintControls from "@/components/thermal-print-controls"
+import { QRCodeDisplay } from "@/components/ui/qr-code-display"
+import { generateDownloadQRPDF, generatePortraitPDF, downloadBlob } from "@/lib/print-utils"
 
 // ADD near the top of the file, after the imports
 async function extractError(resp: Response): Promise<string> {
@@ -68,6 +81,8 @@ export default function SuperheroGenerator() {
   const [generationProgress, setGenerationProgress] = useState<string>("Initializing...")
   const [error, setError] = useState<string | null>(null)
   const [userId] = useState<string | null>(null) // In a real app, get from auth context
+  const [showQRCode, setShowQRCode] = useState(false)
+  const [generatingPDF, setGeneratingPDF] = useState<"qr" | "portrait" | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -348,6 +363,62 @@ export default function SuperheroGenerator() {
     }
   }, [generationResult, compositeResult])
 
+  const generateQRCodePDF = useCallback(async () => {
+    const imageToDownload = compositeResult?.compositeImage || generationResult?.output?.[0]
+
+    if (!imageToDownload) return
+
+    try {
+      setGeneratingPDF("qr")
+      console.log("Generating QR code PDF for:", imageToDownload)
+
+      const pdfBlob = await generateDownloadQRPDF(imageToDownload, `superhero-qr-${Date.now()}.pdf`)
+      downloadBlob(pdfBlob, `superhero-qr-${Date.now()}.pdf`)
+
+      toast({
+        title: "QR Code PDF Generated",
+        description: "Your QR code PDF is ready for thermal printing!",
+      })
+    } catch (error) {
+      console.error("Error generating QR PDF:", error)
+      toast({
+        title: "Error",
+        description: "Failed to generate QR code PDF",
+        variant: "destructive",
+      })
+    } finally {
+      setGeneratingPDF(null)
+    }
+  }, [generationResult, compositeResult])
+
+  const generatePortraitPrintPDF = useCallback(async () => {
+    const imageToDownload = compositeResult?.compositeImage || generationResult?.output?.[0]
+
+    if (!imageToDownload) return
+
+    try {
+      setGeneratingPDF("portrait")
+      console.log("Generating portrait PDF for:", imageToDownload)
+
+      const pdfBlob = await generatePortraitPDF(imageToDownload, `superhero-portrait-${Date.now()}.pdf`)
+      downloadBlob(pdfBlob, `superhero-portrait-${Date.now()}.pdf`)
+
+      toast({
+        title: "Portrait PDF Generated",
+        description: "Your portrait PDF is ready for thermal printing!",
+      })
+    } catch (error) {
+      console.error("Error generating portrait PDF:", error)
+      toast({
+        title: "Error",
+        description: "Failed to generate portrait PDF",
+        variant: "destructive",
+      })
+    } finally {
+      setGeneratingPDF(null)
+    }
+  }, [generationResult, compositeResult])
+
   useEffect(() => {
     if (isCameraActive && videoRef.current && stream) {
       videoRef.current.srcObject = stream
@@ -556,20 +627,70 @@ export default function SuperheroGenerator() {
                   />
                 </div>
 
-                {/* Thermal Print Controls */}
-                <ThermalPrintControls
-                  imageUrl={finalImage}
-                  downloadUrl={finalImage}
-                  generationId={generationResult?.generationId}
-                />
+                {/* QR Code Display */}
+                {showQRCode && (
+                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border">
+                    <div className="text-center space-y-3">
+                      <h4 className="font-medium text-gray-900 dark:text-white">Download QR Code</h4>
+                      <QRCodeDisplay url={finalImage} size={150} className="mx-auto" />
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Scan to download your portrait</p>
+                    </div>
+                  </div>
+                )}
 
-                {compositeResult?.success && (
-                  <Alert>
-                    <CheckCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      Your superhero portrait has been saved and is ready for download and thermal printing!
-                    </AlertDescription>
-                  </Alert>
+                {/* Action Buttons */}
+                <div className="grid grid-cols-2 gap-2">
+                  <Button onClick={downloadImage} className="gap-2">
+                    <Download className="h-4 w-4" />
+                    Download
+                  </Button>
+
+                  <Button onClick={() => setShowQRCode(!showQRCode)} variant="outline" className="gap-2">
+                    <QrCode className="h-4 w-4" />
+                    {showQRCode ? "Hide QR" : "Show QR"}
+                  </Button>
+                </div>
+
+                {/* Print Buttons */}
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    onClick={generateQRCodePDF}
+                    disabled={generatingPDF === "qr"}
+                    variant="outline"
+                    className="gap-2 bg-transparent"
+                  >
+                    {generatingPDF === "qr" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Printer className="h-4 w-4" />
+                    )}
+                    Print QR PDF
+                  </Button>
+
+                  <Button
+                    onClick={generatePortraitPrintPDF}
+                    disabled={generatingPDF === "portrait"}
+                    variant="outline"
+                    className="gap-2 bg-transparent"
+                  >
+                    {generatingPDF === "portrait" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Printer className="h-4 w-4" />
+                    )}
+                    Print Portrait PDF
+                  </Button>
+                </div>
+
+                {generationResult?.output?.[0] && !compositeResult && (
+                  <Button
+                    onClick={() => compositeWithFrame(generationResult.output![0], generationResult.generationId)}
+                    variant="outline"
+                    className="w-full gap-2"
+                  >
+                    <ImageIcon className="h-4 w-4" />
+                    Add Frame
+                  </Button>
                 )}
               </div>
             )}
@@ -593,7 +714,7 @@ export default function SuperheroGenerator() {
           <CardTitle>How it works</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 text-sm">
             <div className="flex items-start gap-3">
               <div className="w-6 h-6 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400 font-semibold text-xs">
                 1
@@ -632,12 +753,41 @@ export default function SuperheroGenerator() {
                 4
               </div>
               <div>
-                <h4 className="font-medium text-gray-900 dark:text-white">Download & Share</h4>
+                <h4 className="font-medium text-gray-900 dark:text-white">Download & QR Code</h4>
                 <p className="text-gray-600 dark:text-gray-400">
-                  Download your framed superhero portrait and share with friends
+                  Download your portrait or generate a QR code for easy sharing
                 </p>
               </div>
             </div>
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400 font-semibold text-xs">
+                5
+              </div>
+              <div>
+                <h4 className="font-medium text-gray-900 dark:text-white">Thermal Print</h4>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Generate thermal printer-friendly PDFs for QR codes and portraits
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+            <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">🖨️ Thermal Printing Features</h4>
+            <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+              <li>
+                • <strong>QR Code PDF:</strong> Generate a thermal-friendly PDF with QR code for easy download sharing
+              </li>
+              <li>
+                • <strong>Portrait PDF:</strong> Print your superhero portrait optimized for 80mm thermal printers
+              </li>
+              <li>
+                • <strong>Auto-sizing:</strong> PDFs are automatically sized for standard thermal paper (80mm width)
+              </li>
+              <li>
+                • <strong>High Quality:</strong> 203 DPI output ensures crisp printing on thermal printers
+              </li>
+            </ul>
           </div>
         </CardContent>
       </Card>

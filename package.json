@@ -45,6 +45,7 @@
     "date-fns": "^3.6.0",
     "embla-carousel-react": "latest",
     "fs": "latest",
+    "html2canvas": "latest",
     "input-otp": "latest",
     "jspdf": "latest",
     "lucide-react": "^0.454.0",
@@ -68,7 +69,7 @@
   },
   "devDependencies": {
     "@types/node": "^22",
-    "@types/qrcode": "^1.5.5",
+    "@types/qrcode": "latest",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^9.0.8",
