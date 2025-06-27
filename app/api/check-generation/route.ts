@@ -96,12 +96,8 @@ export async function GET(req: NextRequest) {
             result.status === "succeeded" ? "completed" : "failed",
         };
 
-        if (
-          result.status === "succeeded" &&
-          result.output &&
-          result.output.length > 0
-        ) {
-          updateFields.superhero_image_url = result.output[0];
+        if (result.status === "succeeded" && result.output) {
+          updateFields.superhero_image_url = result.output;
         }
 
         if (result.status === "failed" && result.error) {
