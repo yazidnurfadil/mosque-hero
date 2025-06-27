@@ -2,7 +2,9 @@ import { type NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 import { supabaseService } from "@/lib/supabase-service";
 import path from "path";
-import fs from "fs";
+import { promises as fs } from "fs";
+
+export const runtime = "nodejs"; // ✅ use Node runtime so we can access fs/sharp
 
 export async function POST(request: NextRequest) {
   console.log("🖼️ Composite image API called");
@@ -41,25 +43,6 @@ export async function POST(request: NextRequest) {
 
     console.log("🖼️ Processing composite with frame:", frameType);
 
-    // Get the frame image path
-    const frameImagePath = path.join(
-      process.cwd(),
-      "public",
-      "frames",
-      `${frameType}.png`,
-    );
-
-    // Check if frame file exists
-    if (!fs.existsSync(frameImagePath)) {
-      console.error("❌ Frame file not found:", frameImagePath);
-      return NextResponse.json(
-        { error: `Frame file not found: ${frameType}.png` },
-        { status: 404 },
-      );
-    }
-
-    console.log("📁 Frame file found:", frameImagePath);
-
     // Fetch the superhero image
     let superheroBuffer: Buffer;
     try {
@@ -67,25 +50,20 @@ export async function POST(request: NextRequest) {
         "🌐 Fetching superhero image from:",
         superheroImage.substring(0, 100) + "...",
       );
-
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-
       const superheroResponse = await fetch(superheroImage, {
         signal: controller.signal,
         headers: {
           "User-Agent": "Mozilla/5.0 (compatible; SuperheroGenerator/1.0)",
         },
       });
-
       clearTimeout(timeoutId);
-
       if (!superheroResponse.ok) {
         throw new Error(
           `Failed to fetch superhero image: ${superheroResponse.status} ${superheroResponse.statusText}`,
         );
       }
-
       superheroBuffer = Buffer.from(await superheroResponse.arrayBuffer());
       console.log(
         "✅ Superhero image fetched, size:",
@@ -100,10 +78,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Load the frame image
+    // Get the frame image buffer from the public URL (works on Vercel)
+    const frameImageUrl = `${process.env.NEXT_PUBLIC_BASE_URL || "https://" + request.headers.get("host")}/frames/${frameType}.png`;
     let frameBuffer: Buffer;
     try {
-      frameBuffer = fs.readFileSync(frameImagePath);
+      console.log("🌐 Fetching frame image from:", frameImageUrl);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      const frameResponse = await fetch(frameImageUrl, {
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; SuperheroGenerator/1.0)",
+        },
+      });
+      clearTimeout(timeoutId);
+      if (!frameResponse.ok) {
+        throw new Error(
+          `Failed to fetch frame image: ${frameResponse.status} ${frameResponse.statusText}`,
+        );
+      }
+      frameBuffer = Buffer.from(await frameResponse.arrayBuffer());
+      if (!frameBuffer?.length) {
+        throw new Error("Frame buffer is empty");
+      }
       console.log("✅ Frame image loaded, size:", frameBuffer.length, "bytes");
     } catch (error) {
       console.error("❌ Error loading frame image:", error);
