@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
 
       Do not use copyrighted superhero outfits, logos, capes, or comic book characters. Focus on original, imaginative design suitable for a child character.
 
-      Use bold colors, thick comic-style outlines, and place the character against a bright blue background.
+      Use bold colors, thick comic-style outlines. Use a solid light blue background (#E9CE50), without patterns, shadows, or textures. Just a flat, clean color.
     `;
 
     const akhwatPromt = `Use the provided input image as a visual reference for the child's face. Match the facial features, skin tone, and expression style as closely as possible, while adapting the head to the character’s new costume.
@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
 
       Avoid superhero references, capes, logos, or comic book characters. Focus on originality, creativity, and visual storytelling.
 
-      Use bold colors, thick comic-style outlines, and place the character against a bright yellow background.
+      Use bold colors, thick comic-style outlines, Place the character against a flat, solid background color: bright yellow (#E9CE50). No gradient or texture..
     `;
 
     try {
@@ -184,7 +184,7 @@ export async function POST(req: NextRequest) {
               input_image: originalImageResult.url,
               prompt: frameType === "ikhwan" ? ikhwanPromt : akhwatPromt,
               aspect_ratio: "1:1",
-              output_format: "jpg",
+              output_format: "png",
               safety_tolerance: 6,
             },
           }),

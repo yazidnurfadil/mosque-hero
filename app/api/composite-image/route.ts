@@ -1,285 +1,251 @@
 import { type NextRequest, NextResponse } from "next/server";
-import sharp from "sharp";
 import { supabaseService } from "@/lib/supabase-service";
+import sharp from "sharp";
+import { promises as fs } from "fs";
+import path from "path";
 
-// Use Node.js runtime for Sharp image processing
-
-export async function POST(request: NextRequest) {
-  console.log("🖼️ Composite image API called");
-
+export async function POST(req: NextRequest) {
   try {
-    const formData = await request.formData();
-    const superheroImage = formData.get("superheroImage") as string;
-    const frameType = formData.get("frameType") as string;
-    const generationId = formData.get("generationId") as string;
-    const userId = formData.get("userId") as string;
+    console.log("Composite image API called");
 
-    console.log("📝 Composite request data:", {
-      superheroImageLength: superheroImage?.length,
+    const formData = await req.formData();
+    const superheroImageUrl = formData.get("superheroImage") as string;
+    const frameType = (formData.get("frameType") as string) || "default";
+    const generationId = formData.get("generationId") as string;
+    const userId = formData.get("userId") as string | null;
+
+    console.log("Request params:", {
+      superheroImageUrl,
       frameType,
       generationId,
       userId,
     });
 
-    if (!superheroImage || !frameType) {
-      console.error("❌ Missing required fields");
+    if (!superheroImageUrl) {
+      console.error("No superhero image URL provided");
       return NextResponse.json(
-        { error: "Missing superhero image or frame type" },
+        { error: "No superhero image URL provided" },
         { status: 400 },
       );
     }
 
-    // Validate frame type
-    const validFrames = ["ikhwan", "akhwat"];
-    if (!validFrames.includes(frameType)) {
-      console.error("❌ Invalid frame type:", frameType);
-      return NextResponse.json(
-        { error: "Invalid frame type. Must be ikhwan or akhwat" },
-        { status: 400 },
-      );
-    }
-
-    console.log("🖼️ Processing composite with frame:", frameType);
-
-    // Get the frame image URL (served from public/frames)
-    const baseUrl =
-      process.env.NEXT_PUBLIC_BASE_URL || (request.headers.get("origin") ?? "");
-    const frameImageUrl = `${baseUrl}/frames/${frameType}.png`;
-
-    // Fetch the frame image
-    let frameBuffer: Buffer;
+    // Fetch the generated superhero image with proper error handling
+    console.log("Fetching superhero image from:", superheroImageUrl);
+    let superheroResponse;
     try {
-      console.log("🌐 Fetching frame image from:", frameImageUrl);
-      const frameResponse = await fetch(frameImageUrl);
-      if (!frameResponse.ok) {
-        throw new Error(
-          `Failed to fetch frame image: ${frameResponse.status} ${frameResponse.statusText}`,
-        );
-      }
-      frameBuffer = Buffer.from(await frameResponse.arrayBuffer());
-      console.log("✅ Frame image fetched, size:", frameBuffer.length, "bytes");
-    } catch (error) {
-      console.error("❌ Error fetching frame image:", error);
+      superheroResponse = await fetch(superheroImageUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; SuperheroGenerator/1.0)",
+        },
+        // Add timeout for production
+        signal: AbortSignal.timeout(30000), // 30 second timeout
+      });
+    } catch (fetchError) {
+      console.error("Failed to fetch superhero image:", fetchError);
       return NextResponse.json(
-        { error: `Frame file not found: ${frameType}.png` },
-        { status: 404 },
-      );
-    }
-
-    // Fetch the superhero image
-    let superheroBuffer: Buffer;
-    try {
-      if (superheroImage.startsWith("data:image/")) {
-        // Handle base64-encoded image
-        console.log("🧬 Decoding base64 superhero image");
-        const base64Data = superheroImage.split(",")[1];
-        if (!base64Data) {
-          throw new Error("Invalid base64 image data");
-        }
-        superheroBuffer = Buffer.from(base64Data, "base64");
-        console.log(
-          "✅ Superhero image decoded, size:",
-          superheroBuffer.length,
-          "bytes",
-        );
-      } else {
-        // Handle image URL
-        console.log(
-          "🌐 Fetching superhero image from:",
-          superheroImage.substring(0, 100) + "...",
-        );
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-
-        const superheroResponse = await fetch(superheroImage, {
-          signal: controller.signal,
-          headers: {
-            "User-Agent": "Mozilla/5.0 (compatible; SuperheroGenerator/1.0)",
-          },
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!superheroResponse.ok) {
-          throw new Error(
-            `Failed to fetch superhero image: ${superheroResponse.status} ${superheroResponse.statusText}`,
-          );
-        }
-        const contentType = superheroResponse.headers.get("content-type") || "";
-        if (!contentType.startsWith("image/")) {
-          throw new Error(
-            `Superhero image is not a valid image type: ${contentType}`,
-          );
-        }
-        superheroBuffer = Buffer.from(await superheroResponse.arrayBuffer());
-        if (!superheroBuffer.length) {
-          throw new Error("Superhero image buffer is empty");
-        }
-        console.log(
-          "✅ Superhero image fetched, size:",
-          superheroBuffer.length,
-          "bytes",
-        );
-      }
-    } catch (error) {
-      console.error("❌ Error fetching superhero image:", error);
-      return NextResponse.json(
-        { error: "Failed to fetch superhero image" },
+        { error: "Failed to fetch superhero image from external source" },
         { status: 500 },
       );
     }
 
-    // Get frame dimensions
-    const frameMetadata = await sharp(frameBuffer).metadata();
-    const frameWidth = frameMetadata.width || 1080;
-    const frameHeight = frameMetadata.height || 1080;
+    if (!superheroResponse.ok) {
+      console.error(
+        "Superhero image fetch failed:",
+        superheroResponse.status,
+        superheroResponse.statusText,
+      );
+      return NextResponse.json(
+        {
+          error: `Failed to fetch superhero image: ${superheroResponse.status}`,
+        },
+        { status: 500 },
+      );
+    }
 
-    console.log("📏 Frame dimensions:", { frameWidth, frameHeight });
+    const superheroBuffer = Buffer.from(await superheroResponse.arrayBuffer());
+    console.log("Superhero image buffer size:", superheroBuffer.length);
 
-    // Process the superhero image and composite with frame
+    // Create frame based on frameType with improved SVG handling
+    let frameBuffer: Buffer;
+
     try {
-      console.log("🔄 Starting image composition...");
+      switch (frameType) {
+        case "ikhwan":
+          frameBuffer = await createIkhwanFrame();
+          break;
 
-      // Calculate the area for the portrait and frame
-      // Portrait will be 90% of the composite size, frame will be 100%
-      const compositeSize = Math.min(frameWidth, frameHeight);
-      const portraitSize = Math.round(compositeSize * 0.85); // 80% of composite
-      const frameSize = compositeSize; // 100% of composite
-      const portraitX = Math.round((compositeSize - portraitSize) / 2);
-      const portraitY = Math.round((compositeSize - portraitSize) / 2);
+        case "akhwat":
+          frameBuffer = await createAkhwatFrame();
+          break;
 
-      console.log("📐 Portrait placement:", {
-        portraitSize,
-        portraitX,
-        portraitY,
-        frameSize,
-      });
+        default: // "default" - Gold frame
+          frameBuffer = await createIkhwanFrame();
+          break;
+      }
+      // Ensure frameBuffer is 800x800
+      frameBuffer = await sharp(frameBuffer).resize(800, 800).png().toBuffer();
+      console.log("Frame buffer created, size:", frameBuffer.length);
+    } catch (frameError) {
+      console.error("Error creating frame:", frameError);
+      return NextResponse.json(
+        { error: "Failed to create frame" },
+        { status: 500 },
+      );
+    }
 
-      // Resize and process superhero image (portrait)
-      const processedSuperhero = await sharp(superheroBuffer)
-        .resize(portraitSize, portraitSize, {
-          fit: "cover",
-          position: "center",
+    // Process superhero image with error handling
+    let resizedSuperhero: Buffer;
+    try {
+      resizedSuperhero = await sharp(superheroBuffer)
+        .resize(680, 680, {
+          fit: "inside",
+          withoutEnlargement: true,
         })
         .png()
         .toBuffer();
+      console.log("Superhero image resized, size:", resizedSuperhero.length);
+    } catch (resizeError) {
+      console.error("Error resizing superhero image:", resizeError);
+      return NextResponse.json(
+        { error: "Failed to process superhero image" },
+        { status: 500 },
+      );
+    }
 
-      console.log("✅ Superhero image processed");
+    // Get dimensions of resized superhero image
+    const { width: superheroWidth, height: superheroHeight } =
+      await sharp(resizedSuperhero).metadata();
 
-      // Resize the frame to be slightly bigger (100% of composite)
-      const resizedFrame = await sharp(frameBuffer)
-        .resize(frameSize, frameSize, {
-          fit: "contain",
-          position: "center",
-        })
-        .png()
-        .toBuffer();
+    // Calculate position to center the superhero image (accounting for text space at bottom)
+    const offsetX = Math.round((800 - (superheroWidth || 650)) / 2);
+    const offsetY = Math.round((720 - (superheroHeight || 650)) / 2) + 20; // Leave space for text
 
-      // Create a blank canvas for the composite
-      const compositeBuffer = await sharp({
+    console.log("Composite positioning:", {
+      offsetX,
+      offsetY,
+      superheroWidth,
+      superheroHeight,
+    });
+
+    // Composite the images with error handling
+    let compositeBuffer: Buffer;
+    try {
+      // Step 1: Create a colored background based on frame type
+      let backgroundColor = { r: 110, g: 155, b: 240, alpha: 1 }; // ikhwan default
+      if (frameType === "akhwat") {
+        backgroundColor = { r: 233, g: 206, b: 80, alpha: 1 }; // #E9CE50
+      }
+      const backgroundCanvas = await sharp({
         create: {
-          width: compositeSize,
-          height: compositeSize,
+          width: 800,
+          height: 800,
           channels: 4,
-          background: { r: 0, g: 0, b: 0, alpha: 0 },
+          background: backgroundColor,
         },
       })
+        .png()
+        .toBuffer();
+
+      // Step 2: Place the character image on the colored background
+      const characterOnBackground = await sharp(backgroundCanvas)
         .composite([
-          // Place the portrait first (behind)
           {
-            input: processedSuperhero,
-            left: portraitX,
-            top: portraitY,
-            blend: "over",
-          },
-          // Place the frame on top
-          {
-            input: resizedFrame,
-            left: 0,
-            top: 0,
-            blend: "over",
+            input: resizedSuperhero,
+            left: offsetX,
+            top: offsetY,
           },
         ])
         .png()
         .toBuffer();
 
-      console.log(
-        "✅ Images composited successfully, final size:",
-        compositeBuffer.length,
-        "bytes",
-      );
-
-      // Upload to Supabase Storage
-      let storagePath: string;
-      let publicUrl: string;
-
-      try {
-        console.log("☁️ Uploading to Supabase Storage...");
-
-        const timestamp = Date.now();
-        const filename = `composite-${frameType}-${timestamp}.png`;
-        storagePath = `composites/${filename}`;
-
-        const uploadResult = await supabaseService.uploadImage(
-          compositeBuffer,
-          storagePath,
-          "image/png",
-        );
-
-        if (!uploadResult.url) {
-          throw new Error("Failed to get public URL");
-        }
-
-        publicUrl = uploadResult.url;
-        console.log("✅ Image uploaded to storage:", publicUrl);
-      } catch (error) {
-        console.error("❌ Storage upload failed:", error);
-        return NextResponse.json(
-          { error: "Failed to save composite image" },
-          { status: 500 },
-        );
-      }
-
-      // Update database record if generationId is provided
-      if (generationId) {
-        try {
-          console.log("💾 Updating database record...");
-
-          await supabaseService.updateGeneration(generationId, {
-            composite_image_url: publicUrl,
-            composite_storage_path: storagePath,
-            frame_type: frameType,
-            status: "completed",
-          });
-
-          console.log("✅ Database updated successfully");
-        } catch (error) {
-          console.error("⚠️ Database update failed (non-critical):", error);
-          // Don't fail the request if database update fails
-        }
-      }
-
-      console.log("🎉 Composite operation completed successfully");
-
-      return NextResponse.json({
-        success: true,
-        compositeImage: publicUrl,
-        storagePath: storagePath,
-        frameType: frameType,
-      });
-    } catch (error) {
-      console.error("❌ Image processing error:", error);
+      // Step 3: Overlay the frame on top
+      compositeBuffer = await sharp(characterOnBackground)
+        .composite([
+          {
+            input: frameBuffer,
+            left: 0,
+            top: 0,
+          },
+        ])
+        .png()
+        .toBuffer();
+      console.log("Composite image created, size:", compositeBuffer.length);
+    } catch (compositeError) {
+      console.error("Error compositing images:", compositeError);
       return NextResponse.json(
-        { error: "Failed to process images" },
+        { error: "Failed to composite images" },
         { status: 500 },
       );
     }
+
+    // Upload composite image to Supabase Storage with error handling
+    let uploadResult;
+    try {
+      uploadResult = await supabaseService.uploadImage(
+        compositeBuffer,
+        `composite-${Date.now()}.png`,
+        "image/png",
+        userId || undefined,
+      );
+      console.log("Image uploaded to Supabase:", uploadResult);
+    } catch (uploadError) {
+      console.error("Error uploading to Supabase:", uploadError);
+      return NextResponse.json(
+        { error: "Failed to upload composite image to storage" },
+        { status: 500 },
+      );
+    }
+
+    if (!uploadResult) {
+      console.error("Upload result is null");
+      return NextResponse.json(
+        { error: "Failed to upload composite image" },
+        { status: 500 },
+      );
+    }
+
+    // Update generation record with composite image URL
+    if (generationId) {
+      try {
+        await supabaseService.updateGeneration(generationId, {
+          composite_image_url: uploadResult.url,
+          generation_status: "completed",
+        });
+        console.log("Generation record updated:", generationId);
+      } catch (updateError) {
+        console.error("Error updating generation record:", updateError);
+        // Don't fail the request if DB update fails, image is already uploaded
+      }
+    }
+
+    console.log("Composite image API completed successfully");
+    return NextResponse.json({
+      success: true,
+      compositeImage: uploadResult.url,
+      storagePath: uploadResult.path,
+    });
   } catch (error) {
-    console.error("❌ Composite API error:", error);
+    console.error("Composite image API error:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      {
+        error: `Failed to composite image: ${error instanceof Error ? error.message : "Unknown error"}`,
+      },
       { status: 500 },
     );
   }
+}
+
+// Helper functions for creating frames with proper error handling
+async function createIkhwanFrame(): Promise<Buffer> {
+  // Read ikhwan.svg from public/frames
+  const svgPath = path.join(process.cwd(), "public", "frames", "ikhwan.svg");
+  const svgContent = await fs.readFile(svgPath, "utf-8");
+  return await sharp(Buffer.from(svgContent)).png().toBuffer();
+}
+
+async function createAkhwatFrame(): Promise<Buffer> {
+  // Read akhwat.svg from public/frames
+  const svgPath = path.join(process.cwd(), "public", "frames", "akhwat.svg");
+  const svgContent = await fs.readFile(svgPath, "utf-8");
+  return await sharp(Buffer.from(svgContent)).png().toBuffer();
 }
