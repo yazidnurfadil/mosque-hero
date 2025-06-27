@@ -6,6 +6,7 @@ import path from "path";
 
 export async function POST(req: NextRequest) {
   try {
+    console.log("Composite image Started");
     console.log("Composite image API called");
 
     const formData = await req.formData();
