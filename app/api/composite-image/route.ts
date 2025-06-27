@@ -1,28 +1,31 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { supabaseService } from "@/lib/supabase-service"
-import sharp from "sharp"
+import { type NextRequest, NextResponse } from "next/server";
+import { supabaseService } from "@/lib/supabase-service";
+import sharp from "sharp";
 
 export async function POST(req: NextRequest) {
   try {
-    const formData = await req.formData()
-    const superheroImageUrl = formData.get("superheroImage") as string
-    const frameType = (formData.get("frameType") as string) || "default"
-    const generationId = formData.get("generationId") as string
-    const userId = formData.get("userId") as string | null
+    const formData = await req.formData();
+    const superheroImageUrl = formData.get("superheroImage") as string;
+    const frameType = (formData.get("frameType") as string) || "default";
+    const generationId = formData.get("generationId") as string;
+    const userId = formData.get("userId") as string | null;
 
     if (!superheroImageUrl) {
-      return NextResponse.json({ error: "No superhero image URL provided" }, { status: 400 })
+      return NextResponse.json(
+        { error: "No superhero image URL provided" },
+        { status: 400 },
+      );
     }
 
     // Fetch the generated superhero image
-    const superheroResponse = await fetch(superheroImageUrl)
+    const superheroResponse = await fetch(superheroImageUrl);
     if (!superheroResponse.ok) {
-      throw new Error("Failed to fetch superhero image")
+      throw new Error("Failed to fetch superhero image");
     }
-    const superheroBuffer = Buffer.from(await superheroResponse.arrayBuffer())
+    const superheroBuffer = Buffer.from(await superheroResponse.arrayBuffer());
 
     // Create frame based on frameType
-    let frameBuffer: Buffer
+    let frameBuffer: Buffer;
 
     switch (frameType) {
       case "mosque":
@@ -49,8 +52,8 @@ export async function POST(req: NextRequest) {
             },
           ])
           .png()
-          .toBuffer()
-        break
+          .toBuffer();
+        break;
 
       case "comic":
         // Create comic book style frame
@@ -76,8 +79,8 @@ export async function POST(req: NextRequest) {
             },
           ])
           .png()
-          .toBuffer()
-        break
+          .toBuffer();
+        break;
 
       case "hero":
         // Create superhero themed frame
@@ -103,8 +106,8 @@ export async function POST(req: NextRequest) {
             },
           ])
           .png()
-          .toBuffer()
-        break
+          .toBuffer();
+        break;
 
       default: // "default" - Gold frame
         frameBuffer = await sharp({
@@ -129,8 +132,8 @@ export async function POST(req: NextRequest) {
             },
           ])
           .png()
-          .toBuffer()
-        break
+          .toBuffer();
+        break;
     }
 
     // Resize superhero image to fit within frame (leaving space for border and text)
@@ -140,14 +143,15 @@ export async function POST(req: NextRequest) {
         withoutEnlargement: true,
       })
       .png()
-      .toBuffer()
+      .toBuffer();
 
     // Get dimensions of resized superhero image
-    const { width: superheroWidth, height: superheroHeight } = await sharp(resizedSuperhero).metadata()
+    const { width: superheroWidth, height: superheroHeight } =
+      await sharp(resizedSuperhero).metadata();
 
     // Calculate position to center the superhero image (accounting for text space at bottom)
-    const offsetX = Math.round((800 - (superheroWidth || 650)) / 2)
-    const offsetY = Math.round((720 - (superheroHeight || 650)) / 2) + 20 // Leave space for text
+    const offsetX = Math.round((800 - (superheroWidth || 650)) / 2);
+    const offsetY = Math.round((720 - (superheroHeight || 650)) / 2) + 20; // Leave space for text
 
     // Composite the images
     const compositeBuffer = await sharp(frameBuffer)
@@ -159,7 +163,7 @@ export async function POST(req: NextRequest) {
         },
       ])
       .png()
-      .toBuffer()
+      .toBuffer();
 
     // Upload composite image to Supabase Storage
     const uploadResult = await supabaseService.uploadImage(
@@ -167,27 +171,33 @@ export async function POST(req: NextRequest) {
       `composite-${Date.now()}.png`,
       "image/png",
       userId || undefined,
-    )
+    );
 
     if (!uploadResult) {
-      return NextResponse.json({ error: "Failed to upload composite image" }, { status: 500 })
+      return NextResponse.json(
+        { error: "Failed to upload composite image" },
+        { status: 500 },
+      );
     }
 
     // Update generation record with composite image URL
     if (generationId) {
       await supabaseService.updateGeneration(generationId, {
-        compositeImageUrl: uploadResult.url,
-        generationStatus: "completed",
-      })
+        composite_image_url: uploadResult.url,
+        generation_status: "completed",
+      });
     }
 
     return NextResponse.json({
       success: true,
       compositeImage: uploadResult.url,
       storagePath: uploadResult.path,
-    })
+    });
   } catch (error) {
-    console.error("Error compositing image:", error)
-    return NextResponse.json({ error: "Failed to composite image" }, { status: 500 })
+    console.error("Error compositing image:", error);
+    return NextResponse.json(
+      { error: "Failed to composite image" },
+      { status: 500 },
+    );
   }
 }
