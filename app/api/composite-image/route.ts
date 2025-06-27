@@ -220,6 +220,7 @@ export async function POST(req: NextRequest) {
     }
 
     console.log("Composite image API completed successfully");
+    console.log("Composite image Ended");
     return NextResponse.json({
       success: true,
       compositeImage: uploadResult.url,
@@ -227,6 +228,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("Composite image API error:", error);
+    console.log("Composite image Ended");
     return NextResponse.json(
       {
         error: `Failed to composite image: ${error instanceof Error ? error.message : "Unknown error"}`,
